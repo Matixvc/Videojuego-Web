@@ -232,12 +232,6 @@ export class Renderer {
         });
     }
 }
-
-        if (e.isElite) {
-            ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.arc(0, 0, e.radius + 4, 0, Math.PI * 2); ctx.stroke();
-        }
-        ctx.restore();
     
 
 

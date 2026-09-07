@@ -23,7 +23,7 @@ const MIME = {
 createServer(async (req, res) => {
     try {
         let pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-        if (pathname === '/') pathname = '/Index.html';
+        if (pathname === '/') pathname = '/index.html';
         const file = normalize(join(ROOT, pathname));
         if (!file.startsWith(normalize(ROOT))) {
             res.writeHead(403); res.end('Forbidden'); return;
