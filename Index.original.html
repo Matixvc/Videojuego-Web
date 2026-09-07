@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Echoes of Infinity - Ultimate Roguelike</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 950: '#05050a', 900: '#0a0a14', 800: '#121224' }
+                    },
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        inter: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #030308;
+            color: #f1f5f9;
+            overflow: hidden;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+        .glow-text {
+            text-shadow: 0 0 12px currentColor;
+        }
+        .pulse-border {
+            animation: pulseBorder 2s infinite ease-in-out;
+        }
+        @keyframes pulseBorder {
+            0%, 100% { border-color: rgba(168, 85, 247, 0.4); box-shadow: 0 0 15px rgba(168, 85, 247, 0.2); }
+            50% { border-color: rgba(168, 85, 247, 0.8); box-shadow: 0 0 25px rgba(168, 85, 247, 0.5); }
+        }
+        .card-hover {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-hover:hover {
+            transform: translateY(-4px) scale(1.02);
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden bg-slate-950 font-inter">
+
+    <!-- CANVAS PRINCIPAL DEL JUEGO -->
+    <canvas id="gameCanvas" class="w-full h-full cursor-crosshair"></canvas>
+
+    <!-- UI - HUD SUPERIOR -->
+    <div id="topHud" class="absolute top-3 left-3 right-3 pointer-events-none flex justify-between items-start z-10 transition-opacity duration-300 opacity-0">
+        <!-- Barra de Vida y Nivel -->
+        <div class="w-1/3 md:w-1/4 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-purple-500/30 shadow-2xl flex flex-col gap-1.5">
+            <div class="flex justify-between items-center text-xs font-bold font-orbitron">
+                <span id="hudHeroName" class="text-purple-400">CABALLERO</span>
+                <span id="hudLevel" class="text-amber-400 text-sm">LVL 1</span>
+            </div>
+            <!-- HP Bar -->
+            <div class="relative w-full h-3.5 bg-slate-900 rounded-full overflow-hidden border border-red-900/50">
+                <div id="hpBarFill" class="h-full bg-gradient-to-r from-red-600 via-rose-500 to-pink-500 transition-all duration-200" style="width: 100%;"></div>
+                <div id="hpText" class="absolute inset-0 flex items-center justify-center text-[9px] font-black text-white glow-text">100 / 100</div>
+            </div>
+            <!-- XP Bar -->
+            <div class="relative w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-cyan-900/50">
+                <div id="xpBarFill" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-200" style="width: 0%;"></div>
+            </div>
+        </div>
+
+        <!-- Indicador de Etapa y Jefes -->
+        <div class="bg-slate-950/85 backdrop-blur-md px-5 py-2 rounded-xl border border-purple-500/40 text-center shadow-xl">
+            <div id="stageNameIndicator" class="text-[10px] text-purple-300 font-bold tracking-widest uppercase font-orbitron">NIVEL 1: CRIPTA SOMBRÍA</div>
+            <div id="floorIndicator" class="font-orbitron font-black text-sm text-amber-400 glow-text">JEFES: 0 / 3</div>
+            <div id="gameTimer" class="font-mono text-xs text-slate-300 font-bold">00:00</div>
+        </div>
+
+        <!-- Estadísticas Rápidas -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <div class="bg-slate-950/85 backdrop-blur-md px-3 py-2 rounded-xl border border-amber-500/30 flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                <span>💀</span> <span id="hudKills">0</span>
+            </div>
+            <button id="btnSoundToggle" class="bg-slate-950/85 backdrop-blur-md p-2 rounded-xl border border-purple-500/30 text-white hover:bg-purple-900/40 transition">
+                🔊
+            </button>
+            <button id="btnPause" class="bg-slate-950/85 backdrop-blur-md p-2 px-3 rounded-xl border border-purple-500/30 text-white hover:bg-purple-900/40 transition font-bold text-xs">
+                ⏸
+            </button>
+        </div>
+    </div>
+
+    <!-- BARRA DE VIDA DEL JEFE -->
+    <div id="bossBarContainer" class="absolute top-20 left-1/2 -translate-x-1/2 w-11/12 max-w-lg hidden flex-col items-center gap-1 z-20">
+        <div id="bossName" class="font-orbitron font-black text-xs text-red-400 glow-text tracking-wider uppercase">⚠️ TITÁN DEVORADOR</div>
+        <div class="relative w-full h-4 bg-slate-950 rounded-full overflow-hidden border-2 border-red-600/80 shadow-2xl">
+            <div id="bossHpFill" class="h-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 transition-all duration-150" style="width: 100%;"></div>
+        </div>
+    </div>
+
+    <!-- MINIMAPA -->
+    <div id="minimapContainer" class="absolute bottom-4 right-4 pointer-events-none transition-opacity duration-300 opacity-0 z-10">
+        <canvas id="minimapCanvas" class="w-32 h-32 md:w-36 md:h-36 bg-slate-950/90 border-2 border-purple-500/40 rounded-2xl backdrop-blur-md shadow-2xl"></canvas>
+    </div>
+
+    <!-- MODAL DE SELECCIÓN DE PERSONAJE -->
+    <div id="modalCharacterSelect" class="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-4">
+        <div class="max-w-4xl w-full bg-slate-900/90 border-2 border-purple-500/50 rounded-3xl p-6 md:p-8 flex flex-col items-center text-center gap-6 shadow-2xl pulse-border">
+            <div class="space-y-1">
+                <h1 class="font-orbitron text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-amber-400 glow-text">
+                    ECHOES OF INFINITY
+                </h1>
+                <p class="text-xs md:text-sm text-slate-400 max-w-md mx-auto">Elige a tu campeón para adentrarte en el abismo infinito</p>
+            </div>
+
+            <!-- Lista de Héroes -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                <!-- Caballero -->
+                <div onclick="startNewGame('knight')" class="bg-slate-950/80 border border-indigo-500/30 hover:border-indigo-400 rounded-2xl p-4 flex flex-col items-center gap-3 cursor-pointer card-hover group">
+                    <div class="w-20 h-20 rounded-xl bg-indigo-950/60 border border-indigo-500/40 flex items-center justify-center text-4xl group-hover:scale-110 transition">⚔️</div>
+                    <div>
+                        <h3 class="font-orbitron font-bold text-indigo-300 text-sm">CABALLERO</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">Alta Vida y Armadura. Ataca con tajo estelar.</p>
+                    </div>
+                </div>
+                <!-- Arcanista -->
+                <div onclick="startNewGame('mage')" class="bg-slate-950/80 border border-purple-500/30 hover:border-purple-400 rounded-2xl p-4 flex flex-col items-center gap-3 cursor-pointer card-hover group">
+                    <div class="w-20 h-20 rounded-xl bg-purple-950/60 border border-purple-500/40 flex items-center justify-center text-4xl group-hover:scale-110 transition">🔮</div>
+                    <div>
+                        <h3 class="font-orbitron font-bold text-purple-300 text-sm">ARCANISTA</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">Ataques de área y disparo de orbes automáticos.</p>
+                    </div>
+                </div>
+                <!-- Cazador -->
+                <div onclick="startNewGame('ranger')" class="bg-slate-950/80 border border-pink-500/30 hover:border-pink-400 rounded-2xl p-4 flex flex-col items-center gap-3 cursor-pointer card-hover group">
+                    <div class="w-20 h-20 rounded-xl bg-pink-950/60 border border-pink-500/40 flex items-center justify-center text-4xl group-hover:scale-110 transition">⚡</div>
+                    <div>
+                        <h3 class="font-orbitron font-bold text-pink-300 text-sm">CAZADOR NEÓN</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">Gran velocidad y alta probabilidad de crítico.</p>
+                    </div>
+                </div>
+                <!-- Segador -->
+                <div onclick="startNewGame('reaper')" class="bg-slate-950/80 border border-emerald-500/30 hover:border-emerald-400 rounded-2xl p-4 flex flex-col items-center gap-3 cursor-pointer card-hover group">
+                    <div class="w-20 h-20 rounded-xl bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center text-4xl group-hover:scale-110 transition">☠️</div>
+                    <div>
+                        <h3 class="font-orbitron font-bold text-emerald-300 text-sm">SEGADOR</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">Corta grupos de enemigos y roba vida.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE SUBIDA DE NIVEL (ESTRICTAMENTE 2 OPCIONES) -->
+    <div id="modalLevelUp" class="absolute inset-0 z-40 bg-slate-950/90 backdrop-blur-md hidden flex-col items-center justify-center p-4">
+        <div class="max-w-2xl w-full bg-slate-900/90 border-2 border-cyan-500/60 rounded-3xl p-6 flex flex-col items-center gap-5 text-center shadow-2xl pulse-border">
+            <div class="space-y-1">
+                <span class="text-3xl">✨</span>
+                <h2 class="font-orbitron text-2xl md:text-3xl font-black text-cyan-300 glow-text">SUBIDA DE NIVEL</h2>
+                <p class="text-xs text-slate-400">Elige 1 de las 2 mejoras para potenciar tu combate</p>
+            </div>
+
+            <!-- Opciones de Subida de Nivel (Exactamente 2) -->
+            <div id="levelUpCardsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full"></div>
+        </div>
+    </div>
+
+    <!-- MODAL DE RECOMPENSA DE JEFE -->
+    <div id="modalBossLoot" class="absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-lg hidden flex-col items-center justify-center p-4">
+        <div class="max-w-3xl w-full bg-slate-900/90 border-2 border-amber-500/60 rounded-2xl p-6 flex flex-col items-center gap-5 text-center shadow-2xl pulse-border">
+            <div class="space-y-1">
+                <span class="text-4xl">👑</span>
+                <h2 class="font-orbitron text-3xl md:text-4xl font-black text-amber-400 glow-text">¡TITÁN DERROTADO!</h2>
+                <p id="bossLootSubtitle" class="text-xs text-slate-300">Reclama tu Reliquia Suprema de combate</p>
+            </div>
+
+            <!-- Opciones de Recompensa de Jefe -->
+            <div id="bossLootCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full"></div>
+        </div>
+    </div>
+
+    <!-- MODAL DE NIVEL COMPLETADO -->
+    <div id="modalStageComplete" class="absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-lg hidden flex-col items-center justify-center p-4">
+        <div class="max-w-xl w-full bg-slate-900/90 border-2 border-indigo-500/60 rounded-2xl p-6 flex flex-col items-center text-center gap-5 shadow-2xl pulse-border">
+            <div class="space-y-2">
+                <span class="text-5xl">🌌</span>
+                <h2 id="stageCompleteTitle" class="font-orbitron text-2xl md:text-3xl font-black text-indigo-400 glow-text">¡NIVEL COMPLETADO!</h2>
+                <p id="stageCompleteDesc" class="text-xs text-slate-300 max-w-md mx-auto">Has derrotado a los 3 Titanes del reino. Prepárate para el siguiente nivel.</p>
+            </div>
+
+            <button id="btnNextStage" class="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-orbitron font-bold py-3.5 rounded-xl shadow-lg transition transform active:scale-95 text-xs">
+                ⚡ AVANZAR AL SIGUIENTE NIVEL
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL DE VICTORIA ABSOLUTA -->
+    <div id="modalVictory" class="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-lg hidden flex-col items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border-2 border-emerald-500/60 rounded-2xl p-6 flex flex-col items-center text-center gap-5 shadow-2xl pulse-border">
+            <div class="space-y-1">
+                <span class="text-5xl">🏆</span>
+                <h2 class="font-orbitron text-3xl font-black text-emerald-400 glow-text">¡VICTORIA ABSOLUTA!</h2>
+                <p class="text-xs text-slate-300">Has conquistado los 3 Niveles y dominado el Infinito.</p>
+            </div>
+
+            <div class="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs font-mono text-left">
+                <div class="flex justify-between"><span>Tiempo Total:</span><span id="victoryTime" class="text-cyan-300">00:00</span></div>
+                <div class="flex justify-between"><span>Nivel de Héroe:</span><span id="victoryLevel" class="text-amber-300">1</span></div>
+                <div class="flex justify-between"><span>Enemigos Eliminados:</span><span id="victoryKills" class="text-red-400">0</span></div>
+                <div class="flex justify-between"><span>Jefes Derrotados:</span><span class="text-purple-400">9 / 9</span></div>
+            </div>
+
+            <button id="btnVictoryRestart" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-orbitron font-bold py-3.5 rounded-xl shadow-lg transition transform active:scale-95 text-xs">
+                🔄 JUGAR OTRA PARTIDA
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL DE PAUSA -->
+    <div id="modalPause" class="absolute inset-0 z-40 bg-slate-950/90 backdrop-blur-md hidden flex-col items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border border-purple-500/40 rounded-2xl p-6 flex flex-col items-center text-center gap-5 shadow-2xl">
+            <h2 class="font-orbitron text-2xl font-black text-purple-300 glow-text">JUEGO EN PAUSA</h2>
+            <div class="w-full space-y-3">
+                <button id="btnResume" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl text-xs transition">
+                    ▶ REANUDAR
+                </button>
+                <button id="btnRestart" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 rounded-xl text-xs transition">
+                    🔄 REINICIAR PARTIDA
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           1. CARGA DE IMÁGENES Y ASSETS LOCALES (CON FALLBACK PROCEDURAL)
+           ========================================================================== */
+        const loadedImages = {};
+        const imageSources = {
+            knight: 'assets/heroes/knight.png',
+            mage: 'assets/heroes/mage.png',
+            ranger: 'assets/heroes/ranger.png',
+            reaper: 'assets/heroes/reaper.png',
+            crawler: 'assets/enemies/crawler.png',
+            runner: 'assets/enemies/runner.png',
+            brute: 'assets/enemies/brute.png',
+            boss: 'assets/enemies/boss.png',
+            ground: 'assets/background/ground.jpg'
+        };
+
+        Object.keys(imageSources).forEach(key => {
+            const img = new Image();
+            img.src = imageSources[key];
+            img.onload = () => { loadedImages[key] = img; };
+            img.onerror = () => { loadedImages[key] = null; };
+        });
+
+        /* ==========================================================================
+           2. SINTETIZADOR DE AUDIO PRO (WEB AUDIO API - SIN RUIDOS CHIRRIANTES)
+           ========================================================================== */
+        class AudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playTone(freq, type, duration, vol = 0.1) {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            }
+            slash() { this.playTone(180, 'triangle', 0.1, 0.08); }
+            shoot() { this.playTone(420, 'sine', 0.08, 0.05); }
+            hit() { this.playTone(90, 'sawtooth', 0.08, 0.04); }
+            xp() { this.playTone(650, 'sine', 0.12, 0.06); }
+            kill() { this.playTone(140, 'sine', 0.15, 0.08); }
+            bossSpawn() { this.playTone(85, 'sawtooth', 0.6, 0.12); }
+        }
+        const audio = new AudioEngine();
+
+        /* ==========================================================================
+           3. BASE DE DATOS DE ARMAS Y HABILIDADES
+           ========================================================================== */
+        const WEAPONS_DB = {
+            sword: { id: 'sword', name: 'Espada Estelar', icon: '⚔️', desc: 'Gran tajo direccional al presionar Clic Izquierdo.', type: 'arc', baseDamage: 45, cooldown: 22, range: 170, duration: 12, isPrimary: true },
+            orbs: { id: 'orbs', name: 'Orbes Arcanos', icon: '🔮', desc: 'Ráfagas de orbes mágicos penetrantes.', type: 'cluster', baseDamage: 30, cooldown: 18, speed: 13, isPrimary: true },
+            lightning: { id: 'lightning', name: 'Daga Relámpago', icon: '⚡', desc: 'Dagas hiper-veloces lanzadas al hacer Clic.', type: 'projectile', baseDamage: 36, cooldown: 14, speed: 18, isPrimary: true },
+            scythe: { id: 'scythe', name: 'Guadaña de Almas', icon: '☠️', desc: 'Arco oscuro que roba vida.', type: 'arc', baseDamage: 48, cooldown: 26, range: 180, duration: 14, isPrimary: true },
+            fire_aura: { id: 'fire_aura', name: 'Aura de Fuego', icon: '🔥', desc: 'Zona pasiva alrededor de ti que quema enemigos.', type: 'aura', baseDamage: 18, tickRate: 10, radius: 140, isPrimary: false },
+            orbiters: { id: 'orbiters', name: 'Escudos Giratorios', icon: '🛡️', desc: 'Orbes de energía que rotan constantemente a tu alrededor.', type: 'orbit', baseDamage: 26, count: 3, speed: 0.06, radius: 150, isPrimary: false },
+            celestial_beam: { id: 'celestial_beam', name: 'Rayo Celestial', icon: '🌩️', desc: 'Caída periódica de rayos divinos sobre enemigos.', type: 'beam', baseDamage: 70, cooldown: 85, radius: 95, isPrimary: false },
+            thunder_mine: { id: 'thunder_mine', name: 'Mina Voltaica', icon: '💣', desc: 'Deja trampas estáticas que explotan al contacto.', type: 'mine', baseDamage: 60, cooldown: 95, radius: 110, isPrimary: false }
+        };
+
+        const PASSIVES_DB = {
+            might: { id: 'might', name: 'Guantelete de Fuerza', icon: '🥊', desc: 'Aumenta el Daño global en +18%.', stat: 'might', value: 0.18 },
+            armor: { id: 'armor', name: 'Placa Rúnica', icon: '🛡️', desc: 'Reduce el daño recibido en +5.', stat: 'armor', value: 5 },
+            haste: { id: 'haste', name: 'Botas de Mercurio', icon: '👟', desc: 'Aumenta la Velocidad en +14%.', stat: 'moveSpeed', value: 0.14 },
+            cooldown: { id: 'cooldown', name: 'Reloj Cósmico', icon: '⏳', desc: 'Aumenta la Cadencia de Ataque en +12%.', stat: 'cooldown', value: 0.12 },
+            area: { id: 'area', name: 'Anillo de Expansión', icon: '🌀', desc: 'Aumenta el Tamaño de Ataques en +22%.', stat: 'area', value: 0.22 },
+            magnet: { id: 'magnet', name: 'Gema Magnética', icon: '🧲', desc: 'Aumenta el Rango de Recolección en +45%.', stat: 'magnet', value: 0.45 },
+            vampire: { id: 'vampire', name: 'Colmillo Vampírico', icon: '🩸', desc: 'Otorga +2% de Robo de Vida.', stat: 'vampire', value: 0.02 },
+            crit: { id: 'crit', name: 'Ojo de Halcón', icon: '🎯', desc: 'Aumenta la Probabilidad de Crítico en +12%.', stat: 'crit', value: 0.12 }
+        };
+
+        const STAGE_CONFIGS = [
+            { id: 1, name: 'Cripta de las Sombras', bgBg: '#090712', accent: '#a855f7' },
+            { id: 2, name: 'Infierno Neón', bgBg: '#180509', accent: '#ef4444' },
+            { id: 3, name: 'Abismo del Vacío', bgBg: '#030c1a', accent: '#06b6d4' }
+        ];
+
+        /* ==========================================================================
+           4. ESTADO DE JUEGO Y VARIABLES
+           ========================================================================== */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const minimapCanvas = document.getElementById('minimapCanvas');
+        const minimapCtx = minimapCanvas.getContext('2d');
+
+        let gameState = 'MENU';
+        let currentStage = 1;
+        let bossesKilledInStage = 0;
+        let totalBossesDefeated = 0;
+        let gameTime = 0;
+        let orbiterAngle = 0;
+
+        let player = {
+            x: 0, y: 0, vx: 0, vy: 0, radius: 28,
+            maxHp: 100, hp: 100, level: 1, xp: 0, nextXp: 35,
+            kills: 0, heroType: 'knight',
+            might: 1.0, armor: 0, moveSpeed: 4.2, cooldownMultiplier: 1.0,
+            areaMultiplier: 1.0, magnetRange: 160, lifesteal: 0, critChance: 0.08, hpRegen: 0.03,
+            accel: 0.6, friction: 0.85,
+            isDashing: false, dashCooldown: 0, dashTimer: 0,
+            invulnerableTimer: 0, weapons: [], passives: []
+        };
+
+        let camera = {
+            x: 0, y: 0, zoom: 0.75,
+            update(tx, ty) {
+                this.x += (tx - this.x) * 0.1;
+                this.y += (ty - this.y) * 0.1;
+            }
+        };
+
+        let keys = {};
+        let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, isDown: false };
+        let enemies = [], projectiles = [], particles = [], drops = [], floatingTexts = [], activeMines = [], activeBeams = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+            if (e.code === 'Space') triggerDash();
+        });
+        window.addEventListener('keyup', e => { keys[e.code] = false; });
+        canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+        canvas.addEventListener('mousedown', e => { if (e.button === 0) mouse.isDown = true; });
+        canvas.addEventListener('mouseup', e => { if (e.button === 0) mouse.isDown = false; });
+
+        /* ==========================================================================
+           5. FUNCIONES AUXILIARES DE EFECTOS
+           ========================================================================== */
+        function createFloatingText(x, y, text, color = '#ffffff') {
+            floatingTexts.push({ x, y, text, color, life: 35 });
+        }
+
+        /* ==========================================================================
+           6. CONTROL DEL JUEGO
+           ========================================================================== */
+        function startNewGame(heroType) {
+            audio.init();
+            player.heroType = heroType;
+            player.x = 0; player.y = 0; player.vx = 0; player.vy = 0;
+            player.level = 1; player.xp = 0; player.nextXp = 35;
+            player.kills = 0; player.weapons = []; player.passives = [];
+            currentStage = 1; bossesKilledInStage = 0; totalBossesDefeated = 0;
+            gameTime = 0; activeMines = []; activeBeams = [];
+
+            camera.x = 0; camera.y = 0;
+            enemies = []; projectiles = []; particles = []; drops = []; floatingTexts = [];
+
+            if (heroType === 'knight') {
+                player.maxHp = 160; player.hp = 160; player.armor = 6; player.moveSpeed = 4.2;
+                addWeapon('sword');
+            } else if (heroType === 'mage') {
+                player.maxHp = 100; player.hp = 100; player.cooldownMultiplier = 0.85; player.areaMultiplier = 1.25;
+                addWeapon('orbs');
+            } else if (heroType === 'ranger') {
+                player.maxHp = 110; player.hp = 110; player.moveSpeed = 5.0; player.critChance = 0.22;
+                addWeapon('lightning');
+            } else if (heroType === 'reaper') {
+                player.maxHp = 125; player.hp = 125; player.might = 1.15; player.lifesteal = 0.03;
+                addWeapon('scythe');
+            }
+
+            document.getElementById('modalCharacterSelect').classList.add('hidden');
+            document.getElementById('topHud').classList.remove('opacity-0');
+            document.getElementById('minimapContainer').classList.remove('opacity-0');
+
+            updateStageHud();
+            updateHud();
+            gameState = 'PLAYING';
+        }
+
+        function addWeapon(id) {
+            const base = WEAPONS_DB[id];
+            if (!base) return;
+            const existing = player.weapons.find(w => w.id === id);
+            if (existing) {
+                existing.level++;
+            } else {
+                player.weapons.push({ ...base, level: 1, timer: 0 });
+            }
+        }
+
+        function addPassive(id) {
+            const base = PASSIVES_DB[id];
+            if (!base) return;
+            const existing = player.passives.find(p => p.id === id);
+            if (existing) {
+                existing.level++;
+            } else {
+                player.passives.push({ ...base, level: 1 });
+            }
+            recalculatePlayerStats();
+        }
+
+        function recalculatePlayerStats() {
+            let mightMod = 1.0;
+            let armorAdd = (player.heroType === 'knight' ? 6 : 0);
+            let speedMod = 1.0;
+            let cooldownMod = (player.heroType === 'mage' ? 0.85 : 1.0);
+            let areaMod = (player.heroType === 'mage' ? 1.25 : 1.0);
+            let magnetAdd = 0;
+            let lifestealAdd = (player.heroType === 'reaper' ? 0.03 : 0);
+            let critAdd = (player.heroType === 'ranger' ? 0.22 : 0.08);
+
+            player.passives.forEach(p => {
+                if (p.stat === 'might') mightMod += p.value * p.level;
+                if (p.stat === 'armor') armorAdd += p.value * p.level;
+                if (p.stat === 'moveSpeed') speedMod += p.value * p.level;
+                if (p.stat === 'cooldown') cooldownMod -= p.value * p.level;
+                if (p.stat === 'area') areaMod += p.value * p.level;
+                if (p.stat === 'magnet') magnetAdd += p.value * p.level;
+                if (p.stat === 'vampire') lifestealAdd += p.value * p.level;
+                if (p.stat === 'crit') critAdd += p.value * p.level;
+            });
+
+            player.might = mightMod;
+            player.armor = armorAdd;
+            player.moveSpeed = (player.heroType === 'ranger' ? 5.0 : 4.2) * speedMod;
+            player.cooldownMultiplier = Math.max(0.25, cooldownMod);
+            player.areaMultiplier = areaMod;
+            player.magnetRange = 160 * (1 + magnetAdd);
+            player.lifesteal = lifestealAdd;
+            player.critChance = critAdd;
+        }
+
+        function triggerDash() {
+            if (player.dashCooldown <= 0 && gameState === 'PLAYING') {
+                player.isDashing = true;
+                player.dashTimer = 10;
+                player.dashCooldown = 120;
+                player.invulnerableTimer = 15;
+            }
+        }
+
+        function updateStageHud() {
+            const conf = STAGE_CONFIGS[currentStage - 1] || STAGE_CONFIGS[0];
+            document.getElementById('stageNameIndicator').innerText = `NIVEL ${currentStage}: ${conf.name.toUpperCase()}`;
+            document.getElementById('floorIndicator').innerText = `JEFES: ${bossesKilledInStage} / 3`;
+        }
+
+        /* ==========================================================================
+           7. GENERACIÓN Y COMPORTAMIENTO DE ENEMIGOS CON IA ÚNICA
+           ========================================================================== */
+        function spawnEnemies() {
+            if (gameState !== 'PLAYING') return;
+
+            const maxEnemiesOnScreen = 30 + currentStage * 15 + player.level * 2;
+            if (enemies.length >= maxEnemiesOnScreen) return;
+
+            if (Math.random() < 0.1 + currentStage * 0.03) {
+                const angle = Math.random() * Math.PI * 2;
+                const spawnDist = (Math.max(canvas.width, canvas.height) / camera.zoom) * 0.65 + 100;
+                const x = player.x + Math.cos(angle) * spawnDist;
+                const y = player.y + Math.sin(angle) * spawnDist;
+
+                const rand = Math.random();
+                let type = 'crawler';
+                if (rand > 0.5) type = 'runner';
+                if (rand > 0.8) type = 'brute';
+
+                const totalHpScale = (1 + (currentStage - 1) * 0.8) * (1 + player.level * 0.08) * (1 + gameTime / 3600);
+                const totalDmgScale = (1 + (currentStage - 1) * 0.4) * (1 + player.level * 0.04);
+
+                if (type === 'crawler') {
+                    enemies.push({ x, y, radius: 24, hp: 30 * totalHpScale, maxHp: 30 * totalHpScale, speed: 2.2 + currentStage * 0.2, damage: 8 * totalDmgScale, type: 'crawler', xpValue: 12, aiTimer: Math.random() * 100 });
+                } else if (type === 'runner') {
+                    enemies.push({ x, y, radius: 18, hp: 20 * totalHpScale, maxHp: 20 * totalHpScale, speed: 3.8 + currentStage * 0.3, damage: 6 * totalDmgScale, type: 'runner', xpValue: 15, flankDir: Math.random() > 0.5 ? 1 : -1 });
+                } else if (type === 'brute') {
+                    enemies.push({ x, y, radius: 42, hp: 130 * totalHpScale, maxHp: 130 * totalHpScale, speed: 1.4 + currentStage * 0.15, damage: 22 * totalDmgScale, type: 'brute', xpValue: 40, chargeState: 0, chargeTimer: 0 });
+                }
+            }
+        }
+
+        function spawnBoss() {
+            audio.bossSpawn();
+            const angle = Math.random() * Math.PI * 2;
+            const x = player.x + Math.cos(angle) * 650;
+            const y = player.y + Math.sin(angle) * 650;
+
+            const bossNumberInStage = bossesKilledInStage + 1;
+            const hpScale = (1 + (currentStage - 1) * 1.3) * (1 + player.level * 0.1) * (1 + bossNumberInStage * 0.6);
+            const bossHp = 1500 * hpScale;
+
+            const bossNames = ["DEVORADOR SOMBRÍO", "TITÁN DE LA CRIPTA", "LORD DEL INFINITO"];
+            const currentBossName = bossNames[bossesKilledInStage] || `TITÁN SUPREMO #${bossNumberInStage}`;
+
+            const boss = {
+                x, y, radius: 85, hp: bossHp, maxHp: bossHp,
+                speed: 1.3 + currentStage * 0.2, damage: 36 * (1 + currentStage * 0.4), color: STAGE_CONFIGS[currentStage-1]?.accent || '#dc2626',
+                type: 'boss', isBoss: true, name: `${currentBossName} (JEFE ${bossNumberInStage}/3)`,
+                xpValue: 800 * currentStage, attackTimer: 0, targetX: player.x, targetY: player.y
+            };
+
+            enemies.push(boss);
+            showToast(`¡ATENCIÓN: Ha aparecido ${boss.name}!`, '⚠️');
+
+            document.getElementById('bossBarContainer').classList.remove('hidden');
+            document.getElementById('bossBarContainer').classList.add('flex');
+            document.getElementById('bossName').innerText = `⚠️ JEFE: ${boss.name}`;
+        }
+
+        /* ==========================================================================
+           8. BUCLE DE ACTUALIZACIÓN Y FÍSICAS
+           ========================================================================== */
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            gameTime++;
+
+            // Generar Jefes periódicamente si hay menos de 3 derrotados en el nivel
+            if (enemies.filter(e => e.isBoss).length === 0 && bossesKilledInStage < 3) {
+                const bossSpawnIntervals = [900, 2400, 3900]; // 15s, 40s, 65s de combate
+                if (gameTime >= bossSpawnIntervals[bossesKilledInStage]) {
+                    spawnBoss();
+                }
+            }
+
+            mouse.worldX = (mouse.x - canvas.width / 2) / camera.zoom + camera.x;
+            mouse.worldY = (mouse.y - canvas.height / 2) / camera.zoom + camera.y;
+
+            camera.update(player.x, player.y);
+
+            if (player.dashCooldown > 0) player.dashCooldown--;
+            if (player.isDashing) {
+                player.dashTimer--;
+                if (player.dashTimer <= 0) player.isDashing = false;
+            }
+            if (player.invulnerableTimer > 0) player.invulnerableTimer--;
+
+            // Movimiento con inercia
+            let moveX = 0, moveY = 0;
+            if (keys['KeyW'] || keys['ArrowUp']) moveY -= 1;
+            if (keys['KeyS'] || keys['ArrowDown']) moveY += 1;
+            if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+            if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+
+            if (moveX !== 0 && moveY !== 0) { moveX *= 0.7071; moveY *= 0.7071; }
+
+            player.vx += moveX * player.accel;
+            player.vy += moveY * player.accel;
+            player.vx *= player.friction;
+            player.vy *= player.friction;
+
+            player.x += player.vx;
+            player.y += player.vy;
+
+            // Regeneración de vida
+            if (player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + player.hpRegen);
+
+            orbiterAngle += 0.04;
+
+            // Lógica de Armas
+            player.weapons.forEach(w => {
+                w.timer++;
+                const effectiveCooldown = w.cooldown * player.cooldownMultiplier;
+
+                if (w.isPrimary && mouse.isDown && w.timer >= effectiveCooldown) {
+                    w.timer = 0;
+                    const attackAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+
+                    if (w.type === 'arc') {
+                        audio.slash();
+                        projectiles.push({ type: 'arc', x: player.x, y: player.y, radius: (w.range + w.level*12)*player.areaMultiplier, damage: w.baseDamage*(1+(w.level-1)*0.2)*player.might, duration: w.duration, timer: 0, angle: attackAngle, color: '#818cf8' });
+                    } else if (w.type === 'cluster') {
+                        audio.shoot();
+                        const count = 3 + Math.floor(w.level / 2);
+                        for (let i = 0; i < count; i++) {
+                            const spreadAngle = attackAngle + (i - (count - 1) / 2) * 0.18;
+                            projectiles.push({ type: 'bullet', x: player.x, y: player.y, vx: Math.cos(spreadAngle)*w.speed, vy: Math.sin(spreadAngle)*w.speed, radius: 9, damage: w.baseDamage*(1+(w.level-1)*0.2)*player.might, color: '#c084fc', life: 100 });
+                        }
+                    } else if (w.type === 'projectile') {
+                        audio.shoot();
+                        projectiles.push({ type: 'bullet', x: player.x, y: player.y, vx: Math.cos(attackAngle)*w.speed, vy: Math.sin(attackAngle)*w.speed, radius: 8, damage: w.baseDamage*(1+(w.level-1)*0.25)*player.might, color: '#f472b6', life: 110 });
+                    }
+                }
+
+                if (!w.isPrimary) {
+                    if (w.type === 'aura' && gameTime % w.tickRate === 0) {
+                        const auraRadius = (w.radius + w.level * 12) * player.areaMultiplier;
+                        const damage = w.baseDamage * (1 + (w.level - 1) * 0.2) * player.might;
+                        enemies.forEach(e => {
+                            if ((e.x - player.x)**2 + (e.y - player.y)**2 < (e.radius + auraRadius)**2) {
+                                damageEnemy(e, damage, false);
+                            }
+                        });
+                    } else if (w.type === 'orbit' && gameTime % 6 === 0) {
+                        const orbCount = w.count + Math.floor(w.level / 2);
+                        const radius = (w.radius + w.level * 6) * player.areaMultiplier;
+                        const damage = w.baseDamage * (1 + (w.level - 1) * 0.2) * player.might;
+                        for (let i = 0; i < orbCount; i++) {
+                            const ang = orbiterAngle + (i * Math.PI * 2 / orbCount);
+                            const ox = player.x + Math.cos(ang) * radius;
+                            const oy = player.y + Math.sin(ang) * radius;
+                            enemies.forEach(e => {
+                                if ((e.x - ox)**2 + (e.y - oy)**2 < (e.radius + 18)**2) {
+                                    damageEnemy(e, damage, false);
+                                }
+                            });
+                        }
+                    } else if (w.type === 'beam' && w.timer >= effectiveCooldown) {
+                        w.timer = 0;
+                        if (enemies.length > 0) {
+                            audio.shoot();
+                            const target = enemies[Math.floor(Math.random() * enemies.length)];
+                            activeBeams.push({ x: target.x, y: target.y, radius: (w.radius + w.level * 10) * player.areaMultiplier, damage: w.baseDamage * player.might, life: 25 });
+                            damageEnemy(target, w.baseDamage * player.might, true);
+                        }
+                    } else if (w.type === 'mine' && w.timer >= effectiveCooldown) {
+                        w.timer = 0;
+                        activeMines.push({ x: player.x, y: player.y, radius: (w.radius + w.level * 8) * player.areaMultiplier, damage: w.baseDamage * player.might, life: 300 });
+                    }
+                }
+            });
+
+            // Minas voltaicas
+            for (let i = activeMines.length - 1; i >= 0; i--) {
+                const mine = activeMines[i];
+                mine.life--;
+                let exploded = false;
+                enemies.forEach(e => {
+                    if (!exploded && (e.x - mine.x)**2 + (e.y - mine.y)**2 < (e.radius + mine.radius * 0.4)**2) {
+                        exploded = true;
+                        audio.hit();
+                        enemies.forEach(e2 => {
+                            if ((e2.x - mine.x)**2 + (e2.y - mine.y)**2 < (e2.radius + mine.radius)**2) {
+                                damageEnemy(e2, mine.damage, true);
+                            }
+                        });
+                    }
+                });
+                if (exploded || mine.life <= 0) activeMines.splice(i, 1);
+            }
+
+            for (let i = activeBeams.length - 1; i >= 0; i--) {
+                activeBeams[i].life--;
+                if (activeBeams[i].life <= 0) activeBeams.splice(i, 1);
+            }
+
+            spawnEnemies();
+
+            // Actualización de Proyectiles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                if (p.type === 'arc') {
+                    p.timer++;
+                    enemies.forEach(e => {
+                        const dx = e.x - p.x, dy = e.y - p.y;
+                        const dist = Math.hypot(dx, dy);
+                        if (dist < p.radius + e.radius) {
+                            const angleToEnemy = Math.atan2(dy, dx);
+                            let diff = Math.abs(angleToEnemy - p.angle);
+                            while (diff > Math.PI) diff -= Math.PI * 2;
+                            if (Math.abs(diff) < 0.9) damageEnemy(e, p.damage / 6, false);
+                        }
+                    });
+                    if (p.timer >= p.duration) projectiles.splice(i, 1);
+                } else if (p.type === 'bullet') {
+                    p.x += p.vx; p.y += p.vy; p.life--;
+                    let hit = false;
+                    enemies.forEach(e => {
+                        if (!hit && (e.x - p.x)**2 + (e.y - p.y)**2 < (e.radius + p.radius)**2) {
+                            hit = true;
+                            damageEnemy(e, p.damage, true);
+                        }
+                    });
+                    if (hit || p.life <= 0) projectiles.splice(i, 1);
+                }
+            }
+
+            // Actualización de Enemigos con IA
+            enemies.forEach(e => {
+                const dx = player.x - e.x, dy = player.y - e.y;
+                const dist = Math.hypot(dx, dy);
+
+                if (e.type === 'crawler') {
+                    e.aiTimer = (e.aiTimer || 0) + 0.05;
+                    const wiggle = Math.sin(e.aiTimer) * 0.4;
+                    const angle = Math.atan2(dy, dx) + wiggle;
+                    e.x += Math.cos(angle) * e.speed;
+                    e.y += Math.sin(angle) * e.speed;
+                } else if (e.type === 'runner') {
+                    const angle = Math.atan2(dy, dx) + e.flankDir * 0.3;
+                    e.x += Math.cos(angle) * e.speed;
+                    e.y += Math.sin(angle) * e.speed;
+                } else if (e.type === 'brute') {
+                    if (e.chargeState === 0) {
+                        e.x += (dx / dist) * e.speed;
+                        e.y += (dy / dist) * e.speed;
+                        if (dist < 280 && Math.random() < 0.02) {
+                            e.chargeState = 1; e.chargeTimer = 40;
+                        }
+                    } else if (e.chargeState === 1) {
+                        e.chargeTimer--;
+                        if (e.chargeTimer <= 0) {
+                            e.chargeState = 2; e.chargeTimer = 20;
+                            e.chargeVx = (dx / dist) * 9; e.chargeVy = (dy / dist) * 9;
+                        }
+                    } else if (e.chargeState === 2) {
+                        e.x += e.chargeVx; e.y += e.chargeVy;
+                        e.chargeTimer--;
+                        if (e.chargeTimer <= 0) e.chargeState = 0;
+                    }
+                } else if (e.type === 'boss') {
+                    e.x += (dx / dist) * e.speed;
+                    e.y += (dy / dist) * e.speed;
+
+                    // Ataques especiales del Jefe
+                    e.attackTimer = (e.attackTimer || 0) + 1;
+                    if (e.attackTimer % 180 === 0) {
+                        for (let b = 0; b < 12; b++) {
+                            const bang = (Math.PI * 2 / 12) * b;
+                            projectiles.push({ type: 'bullet', x: e.x, y: e.y, vx: Math.cos(bang)*5, vy: Math.sin(bang)*5, radius: 10, damage: e.damage*0.6, isEnemy: true, life: 140, color: '#f43f5e' });
+                        }
+                    }
+
+                    document.getElementById('bossHpFill').style.width = `${Math.max(0, (e.hp / e.maxHp) * 100)}%`;
+                }
+
+                // Daño al jugador
+                if (dist < player.radius + e.radius && player.invulnerableTimer <= 0 && !player.isDashing) {
+                    const actualDmg = Math.max(1, e.damage - player.armor);
+                    player.hp -= actualDmg;
+                    player.invulnerableTimer = 20;
+                    audio.hit();
+                    createFloatingText(player.x, player.y - 30, `-${Math.round(actualDmg)}`, '#ef4444');
+
+                    if (player.hp <= 0) {
+                        triggerGameOver();
+                    }
+                }
+            });
+
+            // Recolección de Drops
+            for (let i = drops.length - 1; i >= 0; i--) {
+                const d = drops[i];
+                const dx = player.x - d.x, dy = player.y - d.y;
+                const dist = Math.hypot(dx, dy);
+
+                if (dist < player.magnetRange) {
+                    d.x += (dx / dist) * 8;
+                    d.y += (dy / dist) * 8;
+                }
+
+                if (dist < player.radius + 12) {
+                    audio.xp();
+                    player.xp += d.value;
+                    drops.splice(i, 1);
+                    if (player.xp >= player.nextXp) {
+                        player.xp -= player.nextXp;
+                        player.level++;
+                        player.nextXp = Math.round(player.nextXp * 1.35);
+                        openLevelUpModal();
+                    }
+                }
+            }
+
+            // Partículas
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].x += particles[i].vx;
+                particles[i].y += particles[i].vy;
+                particles[i].life--;
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            // Textos flotantes
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                floatingTexts[i].y -= 0.8;
+                floatingTexts[i].life--;
+                if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1);
+            }
+
+            updateHud();
+        }
+
+        /* ==========================================================================
+           9. COMBATE Y DAÑO
+           ========================================================================== */
+        function damageEnemy(enemy, rawDmg, canCrit) {
+            let isCrit = false;
+            let finalDmg = rawDmg;
+
+            if (canCrit && Math.random() < player.critChance) {
+                isCrit = true;
+                finalDmg *= 2.0;
+            }
+
+            enemy.hp -= finalDmg;
+            createFloatingText(enemy.x, enemy.y - 15, `${Math.round(finalDmg)}`, isCrit ? '#f59e0b' : '#ffffff');
+
+            if (player.lifesteal > 0 && Math.random() < 0.3) {
+                player.hp = Math.min(player.maxHp, player.hp + finalDmg * player.lifesteal);
+            }
+
+            if (enemy.hp <= 0) {
+                killEnemy(enemy);
+            }
+        }
+
+        function killEnemy(enemy) {
+            audio.kill();
+            player.kills++;
+            drops.push({ x: enemy.x, y: enemy.y, value: enemy.xpValue, type: 'xp' });
+
+            if (enemy.isBoss) {
+                bossesKilledInStage++;
+                totalBossesDefeated++;
+                updateStageHud();
+                document.getElementById('bossBarContainer').classList.add('hidden');
+                showToast(`¡TITÁN DERROTADO! (${bossesKilledInStage}/3 del Nivel ${currentStage})`, "🏆");
+                setTimeout(openBossLootModal, 1000);
+            }
+
+            const idx = enemies.indexOf(enemy);
+            if (idx > -1) enemies.splice(idx, 1);
+        }
+
+        /* ==========================================================================
+           10. MODALES Y SUBIDA DE NIVEL (ESTRICTAMENTE 2 OPCIONES)
+           ========================================================================== */
+        function openLevelUpModal() {
+            gameState = 'PAUSED';
+            const modal = document.getElementById('modalLevelUp');
+            const container = document.getElementById('levelUpCardsContainer');
+            if (!modal || !container) return;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            container.innerHTML = '';
+
+            // Obtener opciones disponibles
+            const availableOptions = [];
+            Object.values(WEAPONS_DB).forEach(w => availableOptions.push({ ...w, optionType: 'weapon' }));
+            Object.values(PASSIVES_DB).forEach(p => availableOptions.push({ ...p, optionType: 'passive' }));
+
+            availableOptions.sort(() => 0.5 - Math.random());
+            // SELECCIONAR ESTRICTAMENTE 2 OPCIONES
+            const choices = availableOptions.slice(0, 2);
+
+            choices.forEach(opt => {
+                const card = document.createElement('div');
+                card.className = 'bg-slate-900 border-2 border-cyan-500/40 hover:border-cyan-400 p-5 rounded-2xl flex flex-col justify-between text-left cursor-pointer card-hover group';
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-orbitron border border-cyan-500/30">${opt.optionType === 'weapon' ? 'ARMA' : 'PASIVA'}</span>
+                            <span class="text-3xl">${opt.icon}</span>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-base text-cyan-200 group-hover:text-cyan-100">${opt.name}</h3>
+                        <p class="text-xs text-slate-300 mt-2">${opt.desc}</p>
+                    </div>
+                    <button class="mt-4 w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 rounded-xl text-xs transition">Elegir Mejora</button>
+                `;
+                card.addEventListener('click', () => {
+                    if (opt.optionType === 'weapon') addWeapon(opt.id);
+                    else addPassive(opt.id);
+
+                    modal.classList.add('hidden');
+                    gameState = 'PLAYING';
+                    updateHud();
+                });
+                container.appendChild(card);
+            });
+        }
+
+        function openBossLootModal() {
+            gameState = 'PAUSED';
+            const modal = document.getElementById('modalBossLoot');
+            const container = document.getElementById('bossLootCardsContainer');
+            if (!modal || !container) return;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            container.innerHTML = '';
+
+            document.getElementById('bossLootSubtitle').innerText = `Recompensa del Jefe ${bossesKilledInStage}/3 - Nivel ${currentStage}`;
+
+            const rewards = [
+                { title: 'Corazón de Titán', desc: '+60 Salud Máxima y curación completa.', icon: '💖', action: () => { player.maxHp += 60; player.hp = player.maxHp; } },
+                { title: 'Fuerza Divina', desc: '+25% Daño Global permanente (Might).', icon: '⚡', action: () => { player.might += 0.25; } },
+                { title: 'Elixir de Celeridad', desc: '+20% Cadencia de ataques y velocidad.', icon: '👟', action: () => { player.cooldownMultiplier *= 0.8; player.moveSpeed *= 1.15; } }
+            ];
+
+            rewards.forEach(r => {
+                const card = document.createElement('div');
+                card.className = 'bg-slate-900 border-2 border-amber-500/50 hover:border-amber-400 p-5 rounded-2xl flex flex-col items-center justify-between text-left cursor-pointer card-hover group';
+                card.innerHTML = `
+                    <div class="w-full flex justify-between items-center mb-2">
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-orbitron border border-amber-500/30">RELIQUIA DE JEFE</span>
+                        <span class="text-3xl">${r.icon}</span>
+                    </div>
+                    <div class="w-full space-y-1">
+                        <h3 class="font-orbitron font-bold text-sm text-amber-300">${r.title}</h3>
+                        <p class="text-xs text-slate-300">${r.desc}</p>
+                    </div>
+                    <button class="mt-4 w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-xl text-xs transition">Reclamar</button>
+                `;
+                card.addEventListener('click', () => {
+                    r.action();
+                    modal.classList.add('hidden');
+                    
+                    if (bossesKilledInStage >= 3) {
+                        if (currentStage >= 3) {
+                            triggerVictory();
+                        } else {
+                            openStageCompleteModal();
+                        }
+                    } else {
+                        gameState = 'PLAYING';
+                    }
+                    updateHud();
+                });
+                container.appendChild(card);
+            });
+        }
+
+        function openStageCompleteModal() {
+            gameState = 'PAUSED';
+            const modal = document.getElementById('modalStageComplete');
+            if (!modal) return;
+
+            document.getElementById('stageCompleteTitle').innerText = `¡NIVEL ${currentStage} COMPLETADO!`;
+            document.getElementById('stageCompleteDesc').innerText = `Has superado a los 3 Titanes del Reino. Prepárate para entrar al Nivel ${currentStage + 1}...`;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        document.getElementById('btnNextStage')?.addEventListener('click', () => {
+            currentStage++;
+            bossesKilledInStage = 0;
+            enemies = []; projectiles = []; activeMines = []; activeBeams = [];
+            
+            document.getElementById('modalStageComplete').classList.add('hidden');
+            updateStageHud();
+            showToast(`¡BIENVENIDO AL NIVEL ${currentStage}: ${STAGE_CONFIGS[currentStage-1]?.name.toUpperCase()}!`, "🌌");
+            gameState = 'PLAYING';
+        });
+
+        function triggerVictory() {
+            gameState = 'GAMEOVER';
+            const totalSec = Math.floor(gameTime / 60);
+            const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
+            const secs = String(totalSec % 60).padStart(2, '0');
+
+            document.getElementById('victoryTime').innerText = `${mins}:${secs}`;
+            document.getElementById('victoryLevel').innerText = player.level;
+            document.getElementById('victoryKills').innerText = player.kills;
+
+            document.getElementById('modalVictory').classList.remove('hidden');
+            document.getElementById('modalVictory').classList.add('flex');
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            showToast("¡HAS SIDO DERROTADO!", "☠️");
+            setTimeout(returnToMenu, 1500);
+        }
+
+        function returnToMenu() {
+            gameState = 'MENU';
+            document.getElementById('modalVictory').classList.add('hidden');
+            document.getElementById('modalPause').classList.add('hidden');
+            document.getElementById('modalCharacterSelect').classList.remove('hidden');
+            document.getElementById('topHud').classList.add('opacity-0');
+            document.getElementById('minimapContainer').classList.add('opacity-0');
+        }
+
+        function togglePause() {
+            if (gameState === 'PLAYING') {
+                gameState = 'PAUSED';
+                document.getElementById('modalPause').classList.remove('hidden');
+                document.getElementById('modalPause').classList.add('flex');
+            } else if (gameState === 'PAUSED') {
+                gameState = 'PLAYING';
+                document.getElementById('modalPause').classList.add('hidden');
+            }
+        }
+
+        document.getElementById('btnPause')?.addEventListener('click', togglePause);
+        document.getElementById('btnResume')?.addEventListener('click', togglePause);
+        document.getElementById('btnRestart')?.addEventListener('click', returnToMenu);
+        document.getElementById('btnVictoryRestart')?.addEventListener('click', returnToMenu);
+
+        /* ==========================================================================
+           11. HUD Y NOTIFICACIONES
+           ========================================================================== */
+        function updateHud() {
+            document.getElementById('hpBarFill').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+            document.getElementById('hpText').innerText = `${Math.round(player.hp)} / ${Math.round(player.maxHp)}`;
+            document.getElementById('xpBarFill').style.width = `${Math.min(100, (player.xp / player.nextXp) * 100)}%`;
+            document.getElementById('hudLevel').innerText = `LVL ${player.level}`;
+            document.getElementById('hudKills').innerText = player.kills;
+            document.getElementById('hudHeroName').innerText = player.heroType.toUpperCase();
+
+            const sec = Math.floor(gameTime / 60);
+            const m = String(Math.floor(sec / 60)).padStart(2, '0');
+            const s = String(sec % 60).padStart(2, '0');
+            document.getElementById('gameTimer').innerText = `${m}:${s}`;
+        }
+
+        function showToast(msg, icon = "ℹ️") {
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 border border-purple-500/50 px-4 py-2 rounded-xl text-xs font-bold text-purple-300 shadow-2xl flex items-center gap-2 backdrop-blur-md transition-all duration-300 opacity-0 transform -translate-y-2';
+            toast.innerHTML = `<span>${icon}</span> <span>${msg}</span>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.classList.remove('opacity-0', '-translate-y-2'); }, 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        /* ==========================================================================
+           12. MOTOR DE RENDERIZADO VISUAL
+           ========================================================================== */
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(-camera.x, -camera.y);
+
+            // Suelo
+            const stageTheme = STAGE_CONFIGS[currentStage - 1] || STAGE_CONFIGS[0];
+            const groundImg = loadedImages.ground;
+            if (groundImg && groundImg.complete && groundImg.naturalWidth > 0) {
+                const pattern = ctx.createPattern(groundImg, 'repeat');
+                ctx.fillStyle = pattern;
+                ctx.fillRect(camera.x - canvas.width / camera.zoom, camera.y - canvas.height / camera.zoom, (canvas.width * 2) / camera.zoom, (canvas.height * 2) / camera.zoom);
+            } else {
+                ctx.fillStyle = stageTheme.bgBg;
+                ctx.fillRect(camera.x - canvas.width / camera.zoom, camera.y - canvas.height / camera.zoom, (canvas.width * 2) / camera.zoom, (canvas.height * 2) / camera.zoom);
+
+                ctx.strokeStyle = stageTheme.accent + '22';
+                ctx.lineWidth = 1.5;
+                const gridSize = 100;
+                const startX = Math.floor((camera.x - canvas.width / camera.zoom) / gridSize) * gridSize;
+                const endX = Math.floor((camera.x + canvas.width / camera.zoom) / gridSize) * gridSize;
+                const startY = Math.floor((camera.y - canvas.height / camera.zoom) / gridSize) * gridSize;
+                const endY = Math.floor((camera.y + canvas.height / camera.zoom) / gridSize) * gridSize;
+
+                for (let x = startX; x <= endX; x += gridSize) {
+                    ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, endY); ctx.stroke();
+                }
+                for (let y = startY; y <= endY; y += gridSize) {
+                    ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(endX, y); ctx.stroke();
+                }
+            }
+
+            // Minas Voltaicas
+            activeMines.forEach(mine => {
+                ctx.save();
+                ctx.fillStyle = '#f59e0b'; ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 12;
+                ctx.beginPath(); ctx.arc(mine.x, mine.y, 10, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.restore();
+            });
+
+            // Rayos Celestiales
+            activeBeams.forEach(beam => {
+                ctx.save();
+                ctx.strokeStyle = '#38bdf8'; ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 25; ctx.lineWidth = 8;
+                ctx.beginPath(); ctx.moveTo(beam.x, beam.y - 600); ctx.lineTo(beam.x, beam.y); ctx.stroke();
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.3)';
+                ctx.beginPath(); ctx.arc(beam.x, beam.y, beam.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            });
+
+            // Escudos Giratorios
+            const orbitersWp = player.weapons.find(w => w.id === 'orbiters');
+            if (orbitersWp) {
+                const count = orbitersWp.count + Math.floor(orbitersWp.level / 2);
+                const radius = (orbitersWp.radius + orbitersWp.level * 6) * player.areaMultiplier;
+                ctx.save();
+                for (let i = 0; i < count; i++) {
+                    const ang = orbiterAngle + (i * Math.PI * 2 / count);
+                    const ox = player.x + Math.cos(ang) * radius;
+                    const oy = player.y + Math.sin(ang) * radius;
+                    ctx.fillStyle = '#38bdf8'; ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 15;
+                    ctx.beginPath(); ctx.arc(ox, oy, 11, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            // Drops (Gemas)
+            drops.forEach(d => {
+                ctx.save();
+                ctx.fillStyle = '#38bdf8'; ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 10;
+                ctx.beginPath(); ctx.arc(d.x, d.y, 7, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            });
+
+            // Proyectiles
+            projectiles.forEach(p => {
+                ctx.save();
+                ctx.fillStyle = p.color || '#a855f7';
+                ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 12;
+                if (p.type === 'bullet') {
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
+                } else if (p.type === 'arc') {
+                    ctx.strokeStyle = p.color; ctx.lineWidth = 6;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, p.angle - 0.7, p.angle + 0.7); ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            // Enemigos
+            enemies.forEach(e => {
+                ctx.save();
+                const img = loadedImages[e.type];
+                if (img && img.complete && img.naturalWidth > 0) {
+                    ctx.drawImage(img, e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2);
+                } else {
+                    ctx.fillStyle = e.type === 'boss' ? '#dc2626' : (e.type === 'brute' ? '#a855f7' : (e.type === 'runner' ? '#f97316' : '#ef4444'));
+                    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14;
+                    ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // Advertencias de ataque
+                if (e.type === 'brute' && e.chargeState === 1) {
+                    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.arc(e.x, e.y, e.radius + 12, 0, Math.PI * 2); ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            // Jugador
+            ctx.save();
+            const heroImg = loadedImages[player.heroType];
+            if (heroImg && heroImg.complete && heroImg.naturalWidth > 0) {
+                ctx.drawImage(heroImg, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
+            } else {
+                ctx.fillStyle = '#6366f1'; ctx.shadowColor = '#6366f1'; ctx.shadowBlur = 18;
+                ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.restore();
+
+            // Textos Flotantes
+            floatingTexts.forEach(t => {
+                ctx.save();
+                ctx.font = 'bold 16px Orbitron, sans-serif';
+                ctx.fillStyle = t.color;
+                ctx.shadowColor = t.color; ctx.shadowBlur = 8;
+                ctx.fillText(t.text, t.x, t.y);
+                ctx.restore();
+            });
+
+            ctx.restore();
+
+            renderMinimap();
+        }
+
+        function renderMinimap() {
+            minimapCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+            minimapCtx.fillStyle = '#05050a';
+            minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+
+            const scale = 0.06;
+            const cx = minimapCanvas.width / 2;
+            const cy = minimapCanvas.height / 2;
+
+            // Jugador en Minimapa
+            minimapCtx.fillStyle = '#38bdf8';
+            minimapCtx.fillRect(cx - 3, cy - 3, 6, 6);
+
+            // Enemigos en Minimapa
+            enemies.forEach(e => {
+                const mx = cx + (e.x - player.x) * scale;
+                const my = cy + (e.y - player.y) * scale;
+                if (mx > 0 && mx < minimapCanvas.width && my > 0 && my < minimapCanvas.height) {
+                    minimapCtx.fillStyle = e.isBoss ? '#f59e0b' : '#ef4444';
+                    const size = e.isBoss ? 8 : 3;
+                    minimapCtx.fillRect(mx - size/2, my - size/2, size, size);
+                }
+            });
+        }
+
+        /* BUCLE PRINCIPAL DE ANIMACIÓN */
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = function() {
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
