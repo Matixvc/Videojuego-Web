@@ -25,7 +25,7 @@ export class UIManager {
     _cache() {
         const ids = [
             'toastBanner','toastIcon','toastMessage','topHud','bottomHud','minimapContainer',
-            'playerLevelText','xpBarFill','xpText','hpBarFill','hpText','dashBarFill','dashStatusText',
+            'hudHeroName','playerLevelText','xpBarFill','xpText','hpBarFill','hpText','dashBarFill','dashStatusText',
             'goldCounter','killCounter','timerCounter','floorIndicator','zoomLevelText',
             'btnZoomIn','btnZoomOut','btnToggleSound','weaponIconsContainer','passiveIconsContainer',
             'bossBarContainer','bossName','bossHpBarFill','bossHpText',
@@ -68,6 +68,7 @@ export class UIManager {
     /* ------------------------------- HUD ------------------------------- */
     updateHud() {
         const p = this.game.player;
+        if (this._el.hudHeroName) this._el.hudHeroName.innerText = (HEROES_DB[p.heroType]?.name || 'HÉROE').toUpperCase();
         if (this._el.xpBarFill) this._el.xpBarFill.style.width = `${Math.min(100, (p.xp / p.nextXp) * 100)}%`;
         if (this._el.xpText) this._el.xpText.innerText = `${Math.floor(p.xp)} / ${Math.floor(p.nextXp)} XP`;
         if (this._el.playerLevelText) this._el.playerLevelText.innerText = p.level;
@@ -213,12 +214,13 @@ export class UIManager {
 
     togglePauseMenu() {
         if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.BOSS_FIGHT) {
+            this._prePauseState = this.game.state;
             this.updateStatsGrid();
             this._setVisible('modalPause', true);
             this.game.setState(GAME_STATES.PAUSED);
         } else if (this.game.state === GAME_STATES.PAUSED) {
             this._setVisible('modalPause', false);
-            this.game.setState(GAME_STATES.PLAYING);
+            this.game.setState(this._prePauseState || GAME_STATES.PLAYING);
         }
     }
 

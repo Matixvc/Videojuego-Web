@@ -238,5 +238,6 @@ export class Renderer {
             ctx.beginPath(); ctx.arc(0, 0, e.radius + 4, 0, Math.PI * 2); ctx.stroke();
         }
         ctx.restore();
-    }
-}
+    
+
+

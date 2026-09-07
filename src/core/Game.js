@@ -37,6 +37,7 @@ export class Game {
         this.gameTime = 0;
         this.waveTimer = 0;
         this.bossActive = false;
+        this.bossSpawnedThisWave = false;
         this._bossShopTimer = null;
         this._loopId = null;
         this.state = GAME_STATES.MENU;
@@ -72,7 +73,7 @@ export class Game {
     resetRunState() {
         this.player = null;
         this.enemies = []; this.projectiles = []; this.particles = []; this.drops = []; this.floatingTexts = [];
-        this.waveNumber = 1; this.gameTime = 0; this.waveTimer = 0; this.bossActive = false;
+        this.waveNumber = 1; this.gameTime = 0; this.waveTimer = 0; this.bossActive = false; this.bossSpawnedThisWave = false;
         if (this._bossShopTimer) clearTimeout(this._bossShopTimer);
         this._bossShopTimer = null;
         this.camera.x = 0; this.camera.y = 0; this.camera.zoom = 0.70; this.camera.targetZoom = 0.70;
@@ -109,6 +110,7 @@ export class Game {
             returnToMenu() {
         if (this._bossShopTimer) clearTimeout(this._bossShopTimer);
         this._bossShopTimer = null;
+        this.ui.closeAllModals();
         this.setState(GAME_STATES.CHARACTER_SELECT);
     }
 
@@ -119,15 +121,22 @@ export class Game {
         this.gameTime++;
         this.waveTimer++;
 
-        // Wave end -> merchant shop
+        // Wave end → merchant shop (only when no boss alive and no shop already queued)
         if (this.waveTimer >= CONFIG.WAVE_DURATION_FRAMES) {
-            this.waveTimer = 0;
-            this.waveNumber++;
-            this.ui.openMerchantShop();
-            return;
+            const bossAlive = this.enemies.some(e => e.isBoss);
+            if (bossAlive || this._bossShopTimer !== null) {
+                this.waveTimer = CONFIG.WAVE_DURATION_FRAMES - 1; // keep waiting for boss
+            } else {
+                this.waveTimer = 0;
+                this.waveNumber++;
+                this.bossSpawnedThisWave = false;
+                this.ui.openMerchantShop();
+                return;
+            }
         }
-        // Boss spawn on schedule
-        if (this.waveTimer === CONFIG.BOSS_SPAWN_FRAME && this.waveNumber % CONFIG.BOSS_WAVE_INTERVAL === 0) {
+        // Boss spawn on schedule (once per wave, exact frame not required)
+        if (!this.bossSpawnedThisWave && this.waveTimer >= CONFIG.BOSS_SPAWN_FRAME && this.waveNumber % CONFIG.BOSS_WAVE_INTERVAL === 0) {
+            this.bossSpawnedThisWave = true;
             this.spawnBoss();
         }
 
@@ -194,7 +203,7 @@ export class Game {
             maxHp: db.baseHp * hpScale * eliteMult,
             speed: db.speed,
             damage: db.damage * (isElite ? CONFIG.ELITE_DAMAGE_MULT : 1),
-            color: isElite ? db.eliteColor : db.color,
+            color: isElite ? (db.eliteColor || '#facc15') : db.color,
             type,
             xpValue: isElite ? db.eliteXp : db.xpValue,
             isElite

@@ -7,7 +7,7 @@ import { SoundEngine } from './engine/SoundEngine.js';
 import { SaveSystem } from './store/SaveSystem.js';
 import { Game } from './core/Game.js';
 import { UIManager } from './ui/UIManager.js';
-import { GAME_STATES } from './config.js';
+import { GAME_STATES, CONFIG } from './config.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('gameCanvas');
@@ -41,4 +41,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Expose for debugging in dev tools.
     window.__GAME = { game, ui, audio, save, renderer };
+
+    /* ------------------------------------------------------------------
+     * Optional headless self-test: append ?autotest to the URL and the
+     * engine boots a real run, simulates frames with the REAL canvas
+     * renderer, spawns/kills a boss and reports the result in <title>.
+     * Used by the automated browser check (never runs in normal play).
+     * ------------------------------------------------------------------ */
+    if (new URLSearchParams(location.search).has('autotest')) {
+        setTimeout(() => {
+            try {
+                const g = window.__GAME.game;
+                const parts = [];
+                g.startNewGame('knight');
+                parts.push(`boot=${g.state === 'PLAYING'}`);
+                for (let i = 0; i < 200; i++) g.update();
+                parts.push(`frames=${g.gameTime}`);
+                g.waveNumber = 2;
+                g.waveTimer = CONFIG.BOSS_SPAWN_FRAME;
+                g.update();
+                const boss = g.enemies.find(e => e.isBoss);
+                parts.push(`boss=${!!boss}`);
+                if (boss) { boss.hp = 1; g.damageEnemy(boss, 1); }
+                parts.push(`bossDead=${!g.enemies.some(e => e.isBoss)}`);
+                parts.push(`state=${g.state}`);
+                document.title = `AUTOTEST OK ${parts.join(' ')}`;
+            } catch (e) {
+                document.title = `AUTOTEST FAIL: ${e.message}`;
+            }
+        }, 150);
+    }
 });
